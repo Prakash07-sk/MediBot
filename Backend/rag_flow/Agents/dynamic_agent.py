@@ -2,7 +2,6 @@
 import asyncio
 from utils import config
 from utils.tools import execute_tool
-from utils.vector_db_service import vector_db_service
 from middleware.LLM_Middleware import LLM_Middleware
 
 class DynamicAgent:
@@ -29,53 +28,7 @@ class DynamicAgent:
         
         # Build context with previous response if available
         if previous_response and routing_status:
-            # Special handling for vector_db routing
-            if "vector_db" in routing_status:
-                # Check if database is connected and search for data
-                db_status = vector_db_service.get_connection_status()
-                
-                if db_status["connected"]:
-                    # Database is connected - search for relevant data
-                    search_results = await vector_db_service.search_doctor_info(self.state["input"])
-                    
-                    if search_results.get("found"):
-                        # Format the database results for the LLM
-                        db_context = "Database search results:\n"
-                        for result in search_results["results"]:
-                            db_context += f"- {result['content']}\n"
-                            if result.get("metadata"):
-                                db_context += f"  Metadata: {result['metadata']}\n"
-                        
-                        context = f"""
-Previous Router Response: {previous_response}
-Routing Status: {routing_status}
-Current Prompt: {self.state["prompt"]}
-
-{db_context}
-
-Based on the above database results, provide a helpful and accurate response to the user's query.
-"""
-                    else:
-                        context = f"""
-Previous Router Response: {previous_response}
-Routing Status: {routing_status}
-Current Prompt: {self.state["prompt"]}
-
-Database search completed but no matching information was found for the query: "{self.state["input"]}"
-Please inform the user that while the database is connected, no specific information was found for their query.
-"""
-                else:
-                    # Database not connected - use the original behavior
-                    context = f"""
-Previous Router Response: {previous_response}
-Routing Status: {routing_status}
-Current Prompt: {self.state["prompt"]}
-
-CRITICAL: The database is NOT connected. You must acknowledge this and not hallucinate any medical information.
-Please provide an honest response about the system's current limitations.
-"""
-            else:
-                context = f"""
+            context = f"""
 Previous Router Response: {previous_response}
 Routing Status: {routing_status}
 Current Prompt: {self.state["prompt"]}

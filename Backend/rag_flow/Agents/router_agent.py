@@ -1,5 +1,5 @@
 from utils import logger
-from utils.vector_db_service import vector_db_service
+from database.chromadb_connector import ChromaDBConnector
 from .dynamic_agent import DynamicAgent
 
 async def router_function(state: dict):
@@ -33,7 +33,7 @@ async def router_function(state: dict):
         print(f"\033[92m[ROUTER_AGENT] VECTOR_DB CAPTURED - Decision: '{route_decision}'\033[0m")
         
         # Check database connection status and update message accordingly
-        db_status = vector_db_service.get_connection_status()
+        db_status = ChromaDBConnector().get_connection_status()
         
         if db_status["connected"]:
             state["response"] = "Routing to vector database agent - searching ChromaDB for medical information..."

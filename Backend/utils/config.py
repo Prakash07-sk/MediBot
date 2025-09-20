@@ -24,6 +24,10 @@ class Config:
 		# External service config
 		self.EXTERNAL_SERVICE_URL = os.getenv('EXTERNAL_SERVICE_URL', 'localhost')
 
+		# ChromaDB config
+		self.CHROMADB_HOST = os.getenv('CHROMADB_HOST', 'chromadb_server')
+		self.CHROMADB_PORT = int(os.getenv('CHROMADB_PORT', 8000))
+
 	def get_tools(self):
 		return os.path.join(os.path.dirname(__file__), '../prompts/tools.poml')
 	
