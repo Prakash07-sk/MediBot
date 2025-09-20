@@ -1,0 +1,13 @@
+[[tools]]
+name = "create_appointment"
+description = "Book a new appointment"
+method = "POST"
+endpoint = "/appointments"
+params = ["date", "time", "doctor"]
+
+[[tools]]
+name = "list_appointments"
+description = "Get list of appointments"
+method = "GET"
+endpoint = "/appointments"
+params = []

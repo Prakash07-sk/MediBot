@@ -1,0 +1,20 @@
+llm:
+  default_model: "gpt-4o-mini"
+  provider: "openai"
+  temperature: 0.2
+
+prompts:
+  system: "./app/prompts/system.poml"
+  supervisor: "./app/prompts/supervisor.poml"
+
+tools:
+  - name: create_appointment
+    description: "Book a new appointment"
+    method: POST
+    endpoint: "/appointments"
+    params: ["date", "time", "doctor"]
+  - name: list_appointments
+    description: "Get list of appointments"
+    method: GET
+    endpoint: "/appointments"
+    params: []
