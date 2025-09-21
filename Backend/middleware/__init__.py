@@ -7,8 +7,6 @@ from utils import config
 
 def middleware(app: FastAPI):
 	# Skip CORS middleware - handled in main.py
-	print(f"CORS Configuration - Allowed Origins: {config.ALLOWED_ORIGINS}")
-	print("CORS middleware disabled - using custom bypass in main.py")
 
 	app.add_middleware(
 		CORSMiddleware,
@@ -20,7 +18,6 @@ def middleware(app: FastAPI):
 	
 	# Temporarily disable SuccessResponse middleware to fix Content-Length issue
 	# app.add_middleware(SuccessResponseMiddleware)
-	print("SuccessResponse middleware temporarily disabled")
 	
 	# Add global exception handlers
 	add_exception_handlers(app)

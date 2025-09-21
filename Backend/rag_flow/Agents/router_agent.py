@@ -1,62 +1,73 @@
 from utils import logger
-from database.chromadb_connector import ChromaDBConnector
+from .vector_db_agent import VectorDBAgent
 from .dynamic_agent import DynamicAgent
 
+class RouterAgent:
+    """
+    Router agent class that maintains state properly.
+    """
+    def __init__(self, initial_state: dict):
+        self.state = initial_state
+
+    async def generate_response(self):
+        """
+        Dynamic router function.
+        Returns a string route: "tools", "vector_db", or "fallback_agent"
+        """
+        user_input = self.state.get("input", "")
+        node_prompt = self.state.get("prompt", "")
+        messages = self.state.get("messages", [])
+
+        # The route decision should already be in the messages from the supervisor agent
+        # Look for the route decision in the messages
+        route_decision = None
+        for message in messages:
+            if message.startswith('[supervisor_agent]'):
+                route_decision = message.replace('[supervisor_agent]', '').strip()
+                break
+        
+        if not route_decision:
+            logger.error("[RouterAgent] No route decision found in messages")
+            return "fallback_agent"
+        
+        
+        # Clean up the route decision
+        route_decision = str(route_decision).strip().lower()
+        route_decision = route_decision.replace("'", "").replace('"', "").replace(".", "").strip()
+
+        if "vector_db" in route_decision:
+            try:
+                vector_db_agent = VectorDBAgent({
+                    "input": user_input,
+                    "messages": messages,
+                    "prompt": node_prompt
+                })
+                vector_result = await vector_db_agent.generate_response()
+                
+                # Store the search results in state["response"] - now it will be preserved!
+                self.state["response"] = vector_result
+                self.state["routing_status"] = "vector_db_completed"
+                return "vector_db_agent"
+
+            except Exception as e:
+                import traceback
+                self.state["response"] = f"I encountered an error while searching the medical database: {str(e)}. Please try again or rephrase your question."
+                self.state["routing_status"] = "vector_db_error"
+                return "vector_db_agent"
+
+        elif "tools" in route_decision:
+            print(f"[RouterAgent] TOOLS CAPTURED - Routing to tools agent")
+            self.state["response"] = "This is tools routing - processing operational request. Process is under progress..."
+            self.state["routing_status"] = "tools_in_progress"
+        else:
+            logger.info(f"[RouterAgent] No specific route matched, returning original route_decision: '{route_decision}'")
+
+        return route_decision
+
+# Keep the function for backward compatibility
 async def router_function(state: dict):
     """
-    Fully dynamic router function.
-    Uses the prompt assigned to this node in state (from POML).
-    Returns a single string route: "tools", "vector_db", or "fallback_agent"
+    Wrapper function to maintain compatibility with existing code.
     """
-
-    print(f"\033[93m[ROUTER_AGENT] Processing routing decision\033[0m")
-    user_input = state.get("input", "")
-    node_prompt = state.get("prompt", "")
-    messages = list(state.get("messages", []))
-
-    logger.info(f"[RouterAgent] Processing input: {user_input}")
-
-    dynamic_agent = DynamicAgent({
-        "input": user_input,
-        "messages": messages,
-        "prompt": node_prompt
-    })
-    route_decision = await dynamic_agent.generate_response()
-    
-    # Clean up the route decision
-    route_decision = str(route_decision).strip().lower()
-    route_decision = route_decision.replace("'", "").replace('"', "").replace(".", "").strip()
-
-    # Special logging and state updates for vector_db and tools routing
-    if "vector_db" in route_decision:
-        logger.info(f"[RouterAgent] VECTOR_DB CAPTURED - Routing to vector database agent")
-        print(f"\033[92m[ROUTER_AGENT] VECTOR_DB CAPTURED - Decision: '{route_decision}'\033[0m")
-        
-        # Check database connection status and update message accordingly
-        db_status = ChromaDBConnector().get_connection_status()
-        
-        if db_status["connected"]:
-            state["response"] = "Routing to vector database agent - searching ChromaDB for medical information..."
-        else:
-            state["response"] = "Routing to vector database agent for medical information. Note: ChromaDB database is currently not connected - system will acknowledge this limitation."
-        
-        state["routing_status"] = "vector_db_in_progress"
-        
-    if "tools" in route_decision:
-        logger.info(f"[RouterAgent] TOOLS CAPTURED - Routing to tools agent")
-        print(f"\033[92m[ROUTER_AGENT] TOOLS CAPTURED - Decision: '{route_decision}'\033[0m")
-        
-        # Update state with progress message for tools routing
-        state["response"] = "This is tools routing - processing operational request. Process is under progress..."
-        state["routing_status"] = "tools_in_progress"
-        
-    if "fallback_agent" in route_decision:
-        logger.info(f"[RouterAgent] FALLBACK CAPTURED - Routing to fallback agent")
-        print(f"\033[92m[ROUTER_AGENT] FALLBACK CAPTURED - Decision: '{route_decision}'\033[0m")
-        
-        # Update state with progress message for fallback routing
-        state["response"] = "This query is being handled by the fallback agent for general assistance."
-        state["routing_status"] = "fallback_in_progress"
-
-    # Return **only a string** for LangGraph
-    return route_decision
+    router_agent = RouterAgent(state)
+    return await router_agent.generate_response()

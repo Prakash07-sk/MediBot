@@ -6,7 +6,7 @@ from typing_extensions import TypedDict, Annotated
 from operator import add
 
 # Import dynamic agents and router
-from .Agents import DynamicAgent, router_function
+from .Agents import DynamicAgent, RouterAgent
 from utils import config
 
 class GraphState(TypedDict):
@@ -22,7 +22,6 @@ class GraphFlow:
         # --- Load config file ---
         if config_path is None:
             config_path = config.get_agent_prompt()
-        print(f"\033[92m The config path is: {config_path}\033[0m")
         config_file = Path(config_path)
         if not config_file.exists():
             raise FileNotFoundError(f"Config not found: {config_file}")
@@ -45,7 +44,10 @@ class GraphFlow:
         self.node_types = {}
         for agent in agents_list:
             node_id = agent.get("name")
-            prompt = agent.get("prompt", "")
+            role = agent.get("role", "")
+            description = agent.get("description", "")
+            prompt_text = agent.get("prompt", "")
+            prompt = f"Role: {role}\nDescription: {description}\nPrompt: {prompt_text}"
             
             # Enhance supervisor prompt with dynamic routing options
             if node_id == self.initial_node:
@@ -77,12 +79,38 @@ class GraphFlow:
         # Show dynamic configuration
         self._show_dynamic_configuration()
 
+    def make_router_agent(self):
+        """
+        Create RouterAgent as a proper node that can update state
+        """
+        async def router_node(state):
+            # Get current messages and input
+            messages = list(state.get("messages", []))
+            user_input = state.get("input", "")
+            
+            # Create RouterAgent with state
+            router_agent = RouterAgent(state)
+            route_decision = await router_agent.generate_response()
+            
+            # Add the router's response to messages
+            messages.append(f"[router_agent] {route_decision}")
+            
+            return {
+                "messages": messages,
+                "response": router_agent.state.get("response", ""),  # Get updated response from RouterAgent
+                "routing_status": router_agent.state.get("routing_status", ""),
+                "progress_message": router_agent.state.get("progress_message", ""),
+                "input": user_input,
+                "route_decision": route_decision  # Store route decision for conditional edge
+            }
+        
+        return router_node
+
     def make_agent(self, node_id):
         """
-        Wraps each node into a DynamicAgent call
+        Wraps each node into a DynamicAgent call or specialized agent
         """
         async def agent(state):
-            print(f"\033[94m[AGENT] Processing node: {node_id}\033[0m")
             
             # Get current messages and input
             messages = list(state.get("messages", []))
@@ -119,7 +147,6 @@ class GraphFlow:
                 # Add the agent's response to messages
                 messages.append(f"[{node_id}] {result}")
                 
-                print(f"\033[94m[AGENT] {node_id} completed with result: {result[:100]}...\033[0m")
                 
                 return {
                     "messages": messages, 
@@ -184,7 +211,6 @@ Choose the most appropriate routing option based on the user's query."""
         else:
             enhanced_prompt = base_prompt
         
-        print(f"\033[96m[DYNAMIC_PROMPT] Enhanced supervisor prompt with {len(routing_targets)} routing options\033[0m")
         return enhanced_prompt
 
     def _create_dynamic_route_mapping(self):
@@ -226,7 +252,6 @@ Choose the most appropriate routing option based on the user's query."""
                     route_mapping["fallback"] = agent_name
                     route_mapping["fallback_agent"] = agent_name
         
-        print(f"\033[95m[DYNAMIC_MAPPING] Created route mapping: {route_mapping}\033[0m")
         return route_mapping
 
     def _find_fallback_agent(self):
@@ -252,7 +277,6 @@ Choose the most appropriate routing option based on the user's query."""
         # If no fallback found, return the first non-supervisor, non-response agent
         for agent_name in self.dynamic_agents.keys():
             if agent_name != self.initial_node and agent_name != self.end_node:
-                print(f"\033[93m[FALLBACK] No dedicated fallback found, using: {agent_name}\033[0m")
                 return agent_name
         
         # Last resort - return response agent
@@ -267,35 +291,13 @@ Choose the most appropriate routing option based on the user's query."""
             if agent_name != self.initial_node and agent_name != self.end_node:
                 targets.append(agent_name)
         
-        print(f"\033[95m[TARGETS] Available routing targets: {targets}\033[0m")
         return targets
 
     def _show_dynamic_configuration(self):
         """
         Display the current dynamic configuration for debugging
         """
-        print(f"\033[96m" + "="*60 + "\033[0m")
-        print(f"\033[96m[DYNAMIC CONFIG] GraphFlow Configuration Summary\033[0m")
-        print(f"\033[96m" + "="*60 + "\033[0m")
-        
-        print(f"\033[93m[FLOW] Entry Node: {self.initial_node}\033[0m")
-        print(f"\033[93m[FLOW] Final Node: {self.end_node}\033[0m")
-        
-        print(f"\033[94m[AGENTS] Total Agents: {len(self.dynamic_agents)}\033[0m")
-        for agent_name in self.dynamic_agents.keys():
-            agent_type = "SUPERVISOR" if agent_name == self.initial_node else "RESPONSE" if agent_name == self.end_node else "ROUTING_TARGET"
-            print(f"\033[94m  - {agent_name} ({agent_type})\033[0m")
-        
-        # Show routing mapping
-        route_mapping = self._create_dynamic_route_mapping()
-        print(f"\033[95m[ROUTING] Dynamic Route Mapping:\033[0m")
-        for key, target in route_mapping.items():
-            print(f"\033[95m  - '{key}' -> {target}\033[0m")
-        
-        fallback = self._find_fallback_agent()
-        print(f"\033[93m[FALLBACK] Default Fallback Agent: {fallback}\033[0m")
-        
-        print(f"\033[96m" + "="*60 + "\033[0m")
+        pass
 
     def _build_graph(self):
         """
@@ -304,25 +306,19 @@ Choose the most appropriate routing option based on the user's query."""
         # --- Add all nodes ---
         for node_id in self.dynamic_agents.keys():
             self.workflow.add_node(node_id, self.make_agent(node_id))
-            print(f"\033[93m[NODE] Added node: {node_id}\033[0m")
+        
+        # --- Add RouterAgent as a proper node ---
+        self.workflow.add_node("router_agent", self.make_router_agent())
 
-        # --- Use the dedicated router_function for routing decisions ---
+        # --- Use the route decision from the router node ---
         async def route_to_agent(state):
-            """Route using the dedicated router_function from router_agent.py"""
-            
-            # Prepare state for router_function
-            router_state = {
-                "input": state.get("input", ""),
-                "messages": state.get("messages", []),
-                "prompt": self.node_prompts.get(self.initial_node, "")
-            }
+            """Route using the route decision from the router node"""
             
             try:
-                # Call the router_function to get routing decision
-                route_decision = await router_function(router_state)
+                # Get route decision from the router node
+                route_decision = state.get("route_decision", "")
                 route_decision = str(route_decision).strip().lower()
                 
-                print(f"\033[92m[ROUTER] Router function raw decision: '{route_decision}'\033[0m")
                 
                 # Dynamically create route mapping based on available agents
                 route_mapping = self._create_dynamic_route_mapping()
@@ -334,15 +330,13 @@ Choose the most appropriate routing option based on the user's query."""
                         next_node = agent
                         break
                 
-                print(f"\033[92m[ROUTER] Final routing decision: '{route_decision}' -> routing to: '{next_node}'\033[0m")
                 return next_node
                 
             except Exception as e:
                 fallback_agent = self._find_fallback_agent()
-                print(f"\033[91m[ROUTER ERROR] Router function failed: {e}, defaulting to {fallback_agent}\033[0m")
                 return fallback_agent
 
-        # --- Set up the flow: supervisor -> router_function -> specialized agents -> response ---
+        # --- Set up the flow: supervisor -> router_agent -> specialized agents -> response ---
         # Get available routing targets dynamically
         available_targets = self._get_available_routing_targets()
         
@@ -351,20 +345,21 @@ Choose the most appropriate routing option based on the user's query."""
         for agent_name in available_targets:
             route_map[agent_name] = agent_name
 
-        # Add conditional edges from supervisor using router_function
+        # Add edge from supervisor to router_agent
+        self.workflow.add_edge(self.initial_node, "router_agent")
+        
+        # Add conditional edges from router_agent to specialized agents
         if available_targets:
             self.workflow.add_conditional_edges(
-                self.initial_node,
+                "router_agent",
                 route_to_agent,
                 route_map
             )
-            print(f"\033[95m[ROUTING] Added conditional routing from {self.initial_node} to: {available_targets}\033[0m")
 
         # --- Connect all specialized agents directly to response_agent ---
         for agent_name in available_targets:
             if agent_name != self.end_node:
                 self.workflow.add_edge(agent_name, self.end_node)
-                print(f"\033[95m[EDGE] Added edge: {agent_name} -> {self.end_node}\033[0m")
 
         # --- Set entry and finish nodes ---
         self.workflow.set_entry_point(self.initial_node)
@@ -387,9 +382,7 @@ Choose the most appropriate routing option based on the user's query."""
             "progress_message": ""
         }
 
-        print(f"\033[96m[WORKFLOW] Starting execution with query: '{user_query}'\033[0m")
         result = await self.app.ainvoke(state)
-        print(f"\033[96m[WORKFLOW] Execution completed\033[0m")
         
         # Extract only the final response from response_agent
         messages = result.get("messages", [])
@@ -402,17 +395,11 @@ Choose the most appropriate routing option based on the user's query."""
                 break
         
         if final_response:
-            print(f"\033[96m[FINAL] Returning final response: {final_response[:100]}...\033[0m")
             return {
-                "response": final_response,
-                "routing_status": result.get("routing_status", ""),
-                "progress_message": result.get("progress_message", "")
+                "response": final_response
             }
         else:
             # Fallback if no response_agent message found
-            print(f"\033[91m[ERROR] No final response found, returning full result\033[0m")
             return {
-                "response": result.get("response", "No response generated"),
-                "routing_status": result.get("routing_status", ""),
-                "progress_message": result.get("progress_message", "")
+                "response": result.get("response", "No response generated")
             }

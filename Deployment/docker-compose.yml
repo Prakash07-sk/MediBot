@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  chromadb:
+    build:
+      context: ../data-ingestor
+      dockerfile: Dockerfile
+    image: chroma_db
+    container_name: chromadb_server
+    environment:
+      - CHROMADB_PORT=${CHROMADB_PORT}
+      - CHROMADB_HOST=${CHROMADB_HOST}
+      - CHROMADB_EXTERNAL_PORT=${CHROMADB_EXTERNAL_PORT}
+      - CHROMADB_COLLECTION=${CHROMADB_COLLECTION}
+      - OTEL_SDK_DISABLED=true
+      - CHROMA_OTEL_ENABLED=false
+      - OTEL_TRACES_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none
+    ports:
+      - "${CHROMADB_EXTERNAL_PORT}:${CHROMADB_PORT}"
+    volumes:
+      - ../Data-ingestor/data:/app/data
+      - ../vector-db/chroma:/app/chroma
