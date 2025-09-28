@@ -1,5 +1,6 @@
 # ingest.py
 # Fully generic ingestion and semantic chunking for ChromaDB
+# Version: 2.0 - Enhanced OCR and format support
 
 import os
 import time
@@ -12,9 +13,17 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader
 from langchain_community.document_loaders.word_document import Docx2txtLoader
 from unstructured.partition.auto import partition
 
-# Optional OCR support (for images)
-# pip install pillow pytesseract
-# from unstructured.partition.image import partition_image
+# OCR support for images and other formats
+# pip install pillow pytesseract pdf2image
+try:
+    from PIL import Image
+    import pytesseract
+    OCR_AVAILABLE = True
+    print("✅ OCR support enabled")
+except ImportError as e:
+    OCR_AVAILABLE = False
+    print(f"⚠️ OCR support not available: {e}")
+    print("💡 Install with: pip install pillow pytesseract pdf2image")
 
 # --- Config ---
 CHROMA_HOST = os.getenv("CHROMADB_HOST", "localhost")
@@ -38,6 +47,7 @@ for possible_dir in POSSIBLE_DATA_DIRS:
 if DATA_DIR is None:
     raise FileNotFoundError("Data directory not found")
 
+print("🚀 MediBot Data Ingestor v2.0 - Enhanced OCR and Format Support")
 print(f"📁 Using data directory: {DATA_DIR}")
 
 # --- Generic text extraction ---
@@ -45,42 +55,85 @@ def extract_text_generic(file_path: Path):
     if file_path.name.startswith("."):
         return ""  # skip hidden/system files
 
+    print(f"🔍 Processing {file_path.name}...")
     text = ""
+    
+    # Method 1: Try unstructured partition (handles most formats including images)
     try:
-        # Try unstructured first
+        print(f"  📋 Trying unstructured partition for {file_path.name}")
         elements = partition(filename=str(file_path))
         text = "\n".join([el.text for el in elements if hasattr(el, "text") and el.text.strip()])
         if text:
+            print(f"✅ Extracted text from {file_path.name} using unstructured partition")
             return text
-    except Exception:
-        pass  # fallback
-
-    # Fallback loaders by extension
+        else:
+            print(f"  ⚠️ Unstructured partition returned empty text for {file_path.name}")
+    except Exception as e:
+        print(f"⚠️ Unstructured partition failed for {file_path.name}: {e}")
+    
+    # Method 2: Try OCR for images if available
+    if OCR_AVAILABLE and not text:
+        try:
+            print(f"  🖼️ Trying OCR for {file_path.name}")
+            # Check if file is an image by trying to open with PIL
+            with Image.open(file_path) as img:
+                # If we can open it as an image, try OCR
+                text = pytesseract.image_to_string(img)
+                if text.strip():
+                    print(f"✅ Extracted text from {file_path.name} using OCR")
+                    return text.strip()
+                else:
+                    print(f"  ⚠️ OCR returned empty text for {file_path.name}")
+        except Exception as e:
+            print(f"  ⚠️ OCR failed for {file_path.name}: {e}")
+    elif not OCR_AVAILABLE:
+        print(f"  ⚠️ OCR not available for {file_path.name}")
+    
+    # Method 3: Fallback loaders for known text formats
     ext = file_path.suffix.lower()
+    print(f"  📄 Trying fallback methods for {file_path.name} (extension: {ext})")
     try:
         if ext == ".txt":
+            print(f"    📝 Using TextLoader for {file_path.name}")
             loader = TextLoader(str(file_path))
             docs = loader.load()
             text = "\n".join([d.page_content for d in docs])
         elif ext == ".pdf":
+            print(f"    📄 Using PyPDFLoader for {file_path.name}")
             loader = PyPDFLoader(str(file_path))
             docs = loader.load()
             text = "\n".join([d.page_content for d in docs])
         elif ext in [".docx", ".doc"]:
+            print(f"    📝 Using Docx2txtLoader for {file_path.name}")
             loader = Docx2txtLoader(str(file_path))
             docs = loader.load()
             text = "\n".join([d.page_content for d in docs])
         else:
-            print(f"⚠️ Skipping unsupported format: {file_path}")
-            text = ""
+            # For any other format, try to read as text (might work for some formats)
+            print(f"    🔤 Trying to read {file_path.name} as plain text")
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    text = f.read()
+                if text.strip():
+                    print(f"✅ Extracted text from {file_path.name} as plain text")
+                    return text
+                else:
+                    print(f"  ⚠️ Plain text reading returned empty for {file_path.name}")
+            except Exception as e:
+                print(f"⚠️ Could not extract text from {file_path.name} (format: {ext or 'unknown'}): {e}")
+                text = ""
     except Exception as e:
         print(f"❌ Failed fallback loader for {file_path}: {e}")
         text = ""
 
+    if not text:
+        print(f"❌ No text extracted from {file_path.name}")
     return text
 
 def load_documents_from_directory(directory):
     all_docs = []
+    skipped_files = []
+    
     for file_path in Path(directory).glob("**/*"):
         if not file_path.is_file() or file_path.name.startswith("."):
             continue
@@ -95,8 +148,27 @@ def load_documents_from_directory(directory):
                     "file_type": file_path.suffix.lower().lstrip(".") or "unknown",
                 }
             })
+        else:
+            skipped_files.append(file_path.name)
+    
+    if skipped_files:
+        print(f"⚠️ Could not extract text from {len(skipped_files)} files:")
+        for filename in skipped_files:
+            print(f"  - {filename}")
 
     print(f"📄 Loaded {len(all_docs)} raw documents")
+    
+    # Show format breakdown
+    format_counts = {}
+    for doc in all_docs:
+        file_type = doc["metadata"]["file_type"]
+        format_counts[file_type] = format_counts.get(file_type, 0) + 1
+    
+    if format_counts:
+        print("📊 Format breakdown:")
+        for fmt, count in sorted(format_counts.items()):
+            print(f"  - {fmt}: {count} files")
+    
     return all_docs
 
 # --- Connect to ChromaDB ---

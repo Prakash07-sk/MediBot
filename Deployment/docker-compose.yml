@@ -1,9 +1,7 @@
-version: "3.8"
-
 services:
   chromadb:
     build:
-      context: ../data-ingestor
+      context: ../Data-ingestor
       dockerfile: Dockerfile
     image: chroma_db
     container_name: chromadb_server
