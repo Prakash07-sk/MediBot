@@ -1,5 +1,7 @@
 from utils import logger
+from datetime import datetime
 from .vector_db_agent import VectorDBAgent
+from .tools_agent import ToolsAgent
 from .dynamic_agent import DynamicAgent
 
 class RouterAgent:
@@ -56,9 +58,26 @@ class RouterAgent:
                 return "vector_db_agent"
 
         elif "tools" in route_decision:
-            print(f"[RouterAgent] TOOLS CAPTURED - Routing to tools agent")
-            self.state["response"] = "This is tools routing - processing operational request. Process is under progress..."
-            self.state["routing_status"] = "tools_in_progress"
+            try:
+
+                # In Python, to mimic JS's {...state, input: user_input}, use dict unpacking:
+                tools_agent = ToolsAgent({
+                    **self.state,
+                    "input": user_input,
+                    "messages": messages,
+                })
+
+                tools_result = await tools_agent.generate_response()
+
+                print(f"[RouterAgent] Tools agentsswssss: {tools_agent}")
+
+                self.state["response"] = tools_result
+                self.state["routing_status"] = "tools_completed"
+                return "tools_agent"
+            except Exception as e:
+                self.state["response"] = f"I encountered an error while processing the request: {str(e)}. Please try again or rephrase your question."
+                self.state["routing_status"] = "tools_error"
+                return "tools_agent"
         else:
             logger.info(f"[RouterAgent] No specific route matched, returning original route_decision: '{route_decision}'")
 

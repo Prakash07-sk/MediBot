@@ -1,13 +1,11 @@
 [[tools]]
-name = "create_appointment"
-description = "Book a new appointment"
+name = "calendar"
+action = "create"
 method = "POST"
-endpoint = "/appointments"
-params = ["date", "time", "doctor"]
+mcp_payload = '{"method": "POST", "tool": "calendar", "action": "create", "data": {"summary": "$event_title", "description": "$event_description", "start": {"dateTime": "$start_datetime", "timeZone": "$timezone"}, "end": {"dateTime": "$end_datetime", "timeZone": "$timezone"}}}'
 
 [[tools]]
-name = "list_appointments"
-description = "Get list of appointments"
-method = "GET"
-endpoint = "/appointments"
-params = []
+name = "calendar"
+action = "list"
+method = "POST"
+mcp_payload = '{"method": "POST", "tool": "calendar", "action": "list", "data": {"calendarId": "primary", "start": "$start_date", "end": "$end_date", "maxResults": 10}}'
