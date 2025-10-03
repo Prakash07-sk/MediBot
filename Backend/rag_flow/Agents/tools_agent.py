@@ -53,7 +53,7 @@ class ToolsAgent:
         parsed = toml.loads(agent_prompt_data)
         tools_prompt = ""
         for agent in parsed.get("agents", []):
-            if agent.get("name") == "tools_agent":
+            if agent.get("name") == "mcp_payload_agent":
                 tools_prompt = agent.get("prompt", "")
                 break
         with open(tools_path, "r", encoding="utf-8") as f:

@@ -30,7 +30,7 @@ class MCPServer:
             url = f"{self.base_url}/{tool_payload.get('tool', '')}"
             
             logger.info(f"Making MCP server call to: {url}")
-            logger.debug(f"Tool payload: {json.dumps(tool_payload, indent=2)}")
+            logger.info(f"Tool payload: {json.dumps(tool_payload, indent=2)}")
             
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 method = tool_payload.get("method", "POST").upper()
@@ -61,7 +61,7 @@ class MCPServer:
                 # Log the raw response for debugging
                 raw_response = response.text
                 logger.info(f"MCP server call successful. Status: {response.status_code}")
-                logger.debug(f"Raw response: {raw_response}")
+                logger.info(f"Raw response: {raw_response}")
                 
                 # Check if response is empty
                 if not raw_response or raw_response.strip() == "":

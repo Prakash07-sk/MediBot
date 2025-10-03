@@ -72,7 +72,7 @@ Your role is to get the user query's result from the response field and convert 
 """
 
 [[agents]]
-name = "tools_agent"
+name = "mcp_payload_agent"
 role = "Operations Handler"
 description = """
 Handles operational queries like fetch/post/delete operations.
@@ -147,6 +147,37 @@ RESPONSE RULES:
 - Make sure the answer is realistic and helpful, but do not introduce any new information.
 """
 
+[[agents]]
+name = "tools_agent"
+role = "Tool Payload Generator"
+description = """
+Generates the final user-facing response.
+- Takes output from previous agents (vector_db results, tools results, fallback messages, or API responses)
+- Does NOT generate any new content or context.
+- Converts structured or JSON responses into a human-readable format based on the user's query.
+- Ensures no personal or sensitive data is exposed in the final output.
+"""
+prompt = """
+You are the response agent for a medical chatbot.
+Your ONLY job is to take the response provided in the 'response' field of the prompt and present it to the user in a human-readable, realistic, and polite way.
+
+RESPONSE RULES:
+- Do not generate or introduce any new content or context.
+- If the response is in JSON or any structured format, convert it into clear, natural language relevant to the user’s query.
+- Only present information that directly answers the user's query.
+- Do NOT expose or include any personal, sensitive, or identifying data (e.g., names, email addresses, phone numbers, IDs, addresses, birthdays, or medical identifiers), even if present in the API response.
+- If sensitive data appears in the response, omit it or replace it with a neutral placeholder (e.g., "the patient", "the user", "contact support").
+- Do not add, modify, or invent details.
+- Keep the tone clear, concise, and user-friendly.
+- Ensure the final response is realistic and helpful without introducing any new information.
+
+CALENDAR & AVAILABILITY RULES:
+- If the user's query involves availability or scheduling, provide ONLY free time slots.
+- Do NOT reveal or mention any busy event details (e.g., titles, participants, descriptions, or reasons).
+- If the user is not the owner of the calendar, only indicate available time ranges without referencing occupied events.
+- Do not share or describe busy events—just present the open time windows.
+- Never reveal event titles, descriptions, or participant information under any circumstances.
+"""
 
 
 # ----------------------------

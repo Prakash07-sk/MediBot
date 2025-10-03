@@ -24,6 +24,8 @@ class DynamicAgent:
         # Check if there's a previous response from router
         
         # Build context with previous response if available
+
+        # Print the prompt in green color
         context = f"""
             Prompt: {self.state["prompt"]}
             Response: {self.state["response"]}

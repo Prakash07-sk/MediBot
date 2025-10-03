@@ -37,6 +37,11 @@ class Config:
 	def get_agent_prompt(self):
 		return os.path.join(os.path.dirname(__file__), '../prompts/agent_prompt.poml')
 	
+	def get_response_agent_prompt(self):
+		return """"
+			
+		"""
+		
 # Export a single config object
 config = Config()
 

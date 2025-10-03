@@ -36,7 +36,7 @@ class RouterAgent:
         # Clean up the route decision
         route_decision = str(route_decision).strip().lower()
         route_decision = route_decision.replace("'", "").replace('"', "").replace(".", "").strip()
-
+        print(f"[RouterAgent] Route decision: {route_decision}")
         if "vector_db" in route_decision:
             try:
                 vector_db_agent = VectorDBAgent({
@@ -69,7 +69,7 @@ class RouterAgent:
 
                 tools_result = await tools_agent.generate_response()
 
-                print(f"[RouterAgent] Tools agentsswssss: {tools_agent}")
+                print(f"[RouterAgent] Tools agentsswssss: {tools_result}")
 
                 self.state["response"] = tools_result
                 self.state["routing_status"] = "tools_completed"
