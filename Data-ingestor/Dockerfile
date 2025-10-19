@@ -15,12 +15,12 @@ RUN apt-get update && apt-get install -y \
     libgcc-s1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip
-RUN pip install --upgrade pip
+# Install uv for faster package installation
+RUN pip install --no-cache-dir uv
 
-# Copy requirements and install
+# Copy requirements and install using uv
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy scripts & data
 COPY ingest.py .

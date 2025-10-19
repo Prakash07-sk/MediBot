@@ -16,6 +16,7 @@ class GraphState(TypedDict):
     response: str
     routing_status: str
     progress_message: str
+    conversation_history: list
 
 class GraphFlow:
     def __init__(self, config_path=config.get_agent_prompt()):
@@ -119,14 +120,26 @@ class GraphFlow:
             # Update state with node prompt
             node_prompt = self.node_prompts.get(node_id, "")
             
+            # Get conversation history from state
+            conversation_history = state.get("conversation_history", [])
+            
             # For specialized agents (not supervisor), include conversation history in input
             if node_id != self.initial_node and messages:
                 # Create context from previous messages for specialized agents
                 conversation_context = "\n".join(messages)
-                agent_input = f"Original Query: {user_input}\n\nConversation History:\n{conversation_context}\n\nPlease provide your response based on the above context."
+                
+                # Add formatted conversation history if available
+                history_context = ""
+                if conversation_history:
+                    history_context = f"\n\nPrevious User Conversations:\n" + "\n".join(conversation_history)
+                
+                agent_input = f"Original Query: {user_input}\n\nConversation History:\n{conversation_context}{history_context}\n\nPlease provide your response based on the above context."
             else:
-                # For supervisor, use original input
-                agent_input = user_input
+                # For supervisor, include conversation history in input
+                history_context = ""
+                if conversation_history:
+                    history_context = f"\n\nPrevious User Conversations:\n" + "\n".join(conversation_history)
+                agent_input = f"{user_input}{history_context}"
             
             # Preserve existing state values from previous nodes (especially router)
             state_with_prompt = {
@@ -135,7 +148,8 @@ class GraphFlow:
                 "prompt": node_prompt,
                 "response": state.get("response", ""),  # Preserve router response
                 "routing_status": state.get("routing_status", ""),  # Preserve routing status
-                "progress_message": state.get("progress_message", "")  # Preserve progress message
+                "progress_message": state.get("progress_message", ""),  # Preserve progress message
+                "conversation_history": conversation_history  # Pass conversation history
             }
 
             # Process node via DynamicAgent
@@ -368,18 +382,33 @@ Choose the most appropriate routing option based on the user's query."""
         # --- Compile workflow ---
         self.app = self.workflow.compile()
 
-    async def run(self, user_query: str):
+    async def run(self, user_query: str, conversation_history: list = None):
         """
-        Execute the graph with a given user query and return only the final response
+        Execute the graph with a given user query and conversation history
+        
+        Args:
+            user_query: The current user's query
+            conversation_history: List of previous conversation entries (role, content)
         """
         initial_prompt = self.node_prompts.get(self.initial_node, "")
+        
+        # Format conversation history for context
+        formatted_history = []
+        if conversation_history:
+            for entry in conversation_history:
+                # Access Pydantic model attributes directly
+                role = entry.role if hasattr(entry, 'role') else ""
+                content = entry.content if hasattr(entry, 'content') else ""
+                formatted_history.append(f"{role}: {content}")
+        
         state = {
             "input": user_query,
             "messages": [],
             "prompt": initial_prompt,
             "response": "",
             "routing_status": "",
-            "progress_message": ""
+            "progress_message": "",
+            "conversation_history": formatted_history
         }
 
         result = await self.app.ainvoke(state)

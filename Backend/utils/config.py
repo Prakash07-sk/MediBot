@@ -24,8 +24,22 @@ class Config:
 		self.EXTERNAL_SERVICE_URL = os.getenv('EXTERNAL_SERVICE_URL', 'localhost')
 
 		# ChromaDB config
-		self.CHROMADB_HOST = os.getenv('CHROMADB_HOST', 'localhost')  # Default to localhost for local development
-		self.CHROMADB_PORT = int(os.getenv('CHROMADB_EXTERNAL_PORT', 5001))  # Default to 5001 to match docker-compose mapping
+		# Automatically detect if running in Docker or locally
+		chromadb_host = os.getenv('CHROMADB_HOST', 'localhost')
+		chromadb_port_env = os.getenv('CHROMADB_PORT', None)
+		
+		# If CHROMADB_PORT is not set, determine based on host
+		if chromadb_port_env is None:
+			# If connecting to localhost, use external port (5001)
+			# If connecting to chromadb_server, use internal port (5000)
+			if chromadb_host == 'localhost':
+				self.CHROMADB_PORT = 5001  # External port for local development
+			else:
+				self.CHROMADB_PORT = 5000  # Internal port for Docker networking
+		else:
+			self.CHROMADB_PORT = int(chromadb_port_env)
+		
+		self.CHROMADB_HOST = chromadb_host
 		self.CHROMADB_USER = os.getenv('CHROMADB_USER', 'admin')
 
 		# MCP Server config

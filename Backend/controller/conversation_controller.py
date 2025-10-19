@@ -23,12 +23,16 @@ class ConversationController:
         Process a chat payload and return the LLM response.
 
         Args:
-            payload: An object containing the user's query (expects a 'query' attribute).
+            payload: An object containing the user's query and conversation history.
 
         Returns:
             dict: The response from the LLM, as returned by GraphFlow.run().
         """
-        llm_response = await self.graph_flow.run(payload.query)
+        # Pass both query and conversation history to the graph flow
+        llm_response = await self.graph_flow.run(
+            user_query=payload.query,
+            conversation_history=payload.conversation_history
+        )
         logger.info(f"LLM Response: {llm_response}")
         return llm_response
 
